@@ -1,0 +1,8 @@
+{
+  // Image-based dev container exercising env + lifecycle + variable substitution.
+  "name": "image-simple",
+  "image": "alpine:3",
+  "containerEnv": { "FOO": "bar-${localWorkspaceFolderBasename}" },
+  "remoteEnv": { "HELLO": "world" },
+  "postCreateCommand": "touch /tmp/created && echo postcreate-ran",
+}

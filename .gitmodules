@@ -1,0 +1,3 @@
+[submodule "devcontainers-cli"]
+	path = devcontainers-cli
+	url = https://github.com/devcontainers/cli.git

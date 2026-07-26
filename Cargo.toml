@@ -1,0 +1,23 @@
+[package]
+name = "devc"
+version = "0.1.0"
+edition = "2021"
+description = "Shortcut CLI that brings up the current workspace's dev container and opens a shell into it."
+
+[[bin]]
+name = "devc"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+# preserve_order keeps devcontainer.json/feature key order (matters for chained containerEnv PATH refs).
+serde_json = { version = "1", features = ["preserve_order"] }
+json5 = "0.4"
+# OCI registry fetch (features) over HTTPS, and tar extraction of feature layers.
+ureq = "3"
+tar = "0.4"
+
+[profile.release]
+lto = true
+strip = true

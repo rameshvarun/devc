@@ -1,0 +1,6 @@
+{
+  // Not supported by devc: docker-compose based dev containers. Should error clearly.
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "app",
+  "workspaceFolder": "/workspace"
+}

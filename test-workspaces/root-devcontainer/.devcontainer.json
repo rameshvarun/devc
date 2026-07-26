@@ -1,0 +1,5 @@
+{
+  // A root-level .devcontainer.json (no .devcontainer/ folder).
+  "image": "alpine:3",
+  "postCreateCommand": "echo root-devcontainer-postcreate"
+}

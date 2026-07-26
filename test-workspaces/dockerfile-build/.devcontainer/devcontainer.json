@@ -1,0 +1,9 @@
+{
+  // Dev container built from a Dockerfile.
+  "name": "dockerfile-build",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "args": { "GREETING": "hi-from-build-arg" }
+  },
+  "postCreateCommand": ["sh", "-c", "cat /greeting.txt"]
+}
