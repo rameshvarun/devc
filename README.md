@@ -10,7 +10,7 @@ cd project/ # Swap to your project's directory.
 devc # This will start the container if it doesn't exist, dropping you into a shell.
 ```
 
-## Additioanl Usage
+## Additional Usage
 
 ```bash
 devc --help # Print usage information
