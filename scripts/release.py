@@ -60,9 +60,38 @@ def check_prerequisites() -> None:
     # A clean tree keeps the release commit to exactly the version bump.
     if capture(["git", "status", "--porcelain"]):
         fail("working tree is not clean; commit or stash changes first")
+    # Make sure the final `git push` will fast-forward. We bump, commit, and tag before pushing, so
+    # a rejected push would leave the repo half-released; catch a stale branch up front instead.
+    check_branch_up_to_date()
     # `gh` must be authenticated to create the release and upload the asset.
     if subprocess.run(["gh", "auth", "status"], cwd=REPO_ROOT).returncode != 0:
         fail("gh is not authenticated; run `gh auth login`")
+
+
+def check_branch_up_to_date() -> None:
+    """Fetch from origin and abort if the current branch is behind its remote counterpart."""
+    branch = capture(["git", "rev-parse", "--abbrev-ref", "HEAD"])
+    if branch == "HEAD":
+        fail("detached HEAD; check out a branch before releasing")
+
+    # Refresh remote-tracking refs so the behind-check below reflects the real remote state.
+    run(["git", "fetch", "origin"])
+
+    remote_ref = f"origin/{branch}"
+    remote_exists = subprocess.run(
+        ["git", "rev-parse", "--verify", "--quiet", remote_ref],
+        cwd=REPO_ROOT, capture_output=True, text=True,
+    ).returncode == 0
+    # A brand-new branch has no remote counterpart yet; the push will simply create it.
+    if not remote_exists:
+        return
+
+    behind = capture(["git", "rev-list", "--count", f"HEAD..{remote_ref}"])
+    if behind != "0":
+        fail(
+            f"local {branch} is behind {remote_ref} by {behind} commit(s); "
+            "integrate the remote changes first (e.g. `git pull --rebase`) before releasing"
+        )
 
 
 def bump_minor_version() -> tuple[str, str]:
