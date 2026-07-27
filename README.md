@@ -2,7 +2,7 @@
 
 `devc` is an alternate [devcontainers](https://containers.dev/) CLI with a simplified interface. It's based on the [upstream reference CLI](https://github.com/devcontainers/cli), but ported to Rust by Claude and packaged as a single self-contained binary.
 
-Currently macOS and Linux are supported. As a pre-requisite, you need to have a Docker-compatible container runtime installed.
+Currently macOS and Linux are supported. As a prerequisite, you need to have a Docker-compatible container runtime installed.
 
 ## Quickstart
 
@@ -22,11 +22,24 @@ Once the CLI is installed, switch to a project that has a `.devcontainer` spec.
 ```bash
 cd project/ # Switch to your project's directory.
 devc npm test # Run any command inside the container, starting it if it doesn't exist.
-devc # Run with no arguments to get a shell inside the container.
+devc # Or, run with no arguments to get a shell inside the container.
 ```
 
 ## Additional Usage
 
 ```bash
 devc --help # Print usage information
+```
+
+## Motivation
+
+Containers make it easy to create reproducible, sandboxed dev environments - that's why the [devcontainers](https://containers.dev/) specification exists. Although well integrated into VSCode, devcontainers aren't as convenient to use from the command line. `devc` bridges that gap by providing a simplified interface for launching and using devcontainers.
+
+```bash
+# Using the reference CLI
+devcontainer up --workspace-folder .
+devcontainer exec --workspace-folder . npm test
+
+# Using devc
+devc npm test
 ```
