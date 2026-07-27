@@ -1,0 +1,12 @@
+# Pin the cross build images by digest so Linux release binaries are reproducible on any checkout.
+#
+# We deliberately do NOT use the cross 0.2.5 release images: they ship glibc 2.27, but modern Rust's
+# host build-script binaries (needed when the target arch differs from the amd64 image, e.g. aarch64)
+# require glibc >= 2.28, so those builds fail with "GLIBC_2.28 not found". The cross `:main` images
+# are Ubuntu 24.04 (glibc 2.39) and build both targets cleanly. `:main` is a moving tag, so we pin
+# the exact digest here to keep builds reproducible. Refresh the digests when intentionally updating.
+[target.x86_64-unknown-linux-musl]
+image = "ghcr.io/cross-rs/x86_64-unknown-linux-musl@sha256:b7452ab0229ccaf49fd17b207f148bb470362a8da3fdb903b332fbfc819367fc"
+
+[target.aarch64-unknown-linux-musl]
+image = "ghcr.io/cross-rs/aarch64-unknown-linux-musl@sha256:972cd947b3b190b890b00a840660c146806fdf26f946cc1449742d275ac569ac"
