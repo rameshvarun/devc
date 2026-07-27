@@ -19,12 +19,12 @@ Once the CLI is installed, swap to a project that has a `.devcontainer` spec.
 
 ```bash
 cd project/ # Swap to your project's directory.
-devc # This will start the container if it doesn't exist, dropping you into a shell.
+devc npm test # Run any command inside the container, starting it if it doesn't exist.
+devc # Run with no arguments to get a shell inside the container.
 ```
 
 ## Additional Usage
 
 ```bash
 devc --help # Print usage information
-devc npm test # Run any command inside the container. This will start the container if it doesn't exist.
 ```
