@@ -1,6 +1,6 @@
 # devc
 
-`devc` is a alternate [devcontainers](https://containers.dev/) CLI with a simplified interface. It's based off the [upstream reference CLI](https://github.com/devcontainers/cli), but ported to Rust by Claude and packaged as a single self contained binary.
+`devc` is an alternate [devcontainers](https://containers.dev/) CLI with a simplified interface. It's based off the [upstream reference CLI](https://github.com/devcontainers/cli), but ported to Rust by Claude and packaged as a single self contained binary.
 
 ## Quickstart
 
