@@ -26,5 +26,5 @@ devc # This will start the container if it doesn't exist, dropping you into a sh
 
 ```bash
 devc --help # Print usage information
-devc cat /etc/os-release # Run any command inside the container.
+devc npm test # Run any command inside the container. This will start the container if it doesn't exist.
 ```
