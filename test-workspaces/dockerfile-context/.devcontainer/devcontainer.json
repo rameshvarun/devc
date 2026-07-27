@@ -1,0 +1,10 @@
+{
+  // Dockerfile lives in .devcontainer/, but the build context is the workspace root (`..`).
+  // Per the spec, `build.dockerfile` is resolved relative to this devcontainer.json, NOT relative
+  // to the context — so devc must pick .devcontainer/Dockerfile, not the Dockerfile at the root.
+  "name": "dockerfile-context",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  }
+}

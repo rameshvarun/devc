@@ -120,8 +120,12 @@ fn create_container(
     let base_image = if config.is_dockerfile_build() {
         let tag = format!("devc-{}-{}", sanitize(ws_basename), short_hash(workspace));
         let dockerfile_rel = config.dockerfile().unwrap();
+        // Both the context and the Dockerfile are resolved relative to the devcontainer.json
+        // directory — independently of each other. In particular the Dockerfile is NOT relative to
+        // the context, so `{ "dockerfile": "Dockerfile", "context": ".." }` still finds the
+        // Dockerfile next to devcontainer.json.
         let context = resolve_relative(&loaded.config_dir, &config.build_context());
-        let dockerfile = resolve_relative(&context, &dockerfile_rel);
+        let dockerfile = resolve_relative(&loaded.config_dir, &dockerfile_rel);
         let (build_args, target, cache_from, options) = match &config.build {
             Some(b) => (
                 b.args.clone(),

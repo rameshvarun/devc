@@ -254,6 +254,34 @@ fn dockerfile_is_built_with_build_arg() {
     cleanup(ws);
 }
 
+#[test]
+fn dockerfile_is_resolved_relative_to_config_not_context() {
+    require_docker!();
+    let _guard = docker_lock();
+    let ws = "dockerfile-context";
+    cleanup(ws);
+
+    // The config has `"dockerfile": "Dockerfile"` with `"context": ".."`. Per the spec, the
+    // Dockerfile is resolved relative to devcontainer.json (.devcontainer/Dockerfile), not relative
+    // to the context (which holds a decoy Dockerfile at the workspace root).
+    let out = run(ws, &[], "cat /which-dockerfile.txt\nexit 0\n");
+    let o = stdout(&out);
+    let e = stderr(&out);
+
+    assert!(out.status.success(), "run should succeed; stderr: {e}");
+    assert!(e.contains("building image"), "should build the image; stderr: {e}");
+    assert!(
+        o.contains("correct-dockerfile-in-devcontainer"),
+        "should build .devcontainer/Dockerfile, not the context-root decoy; stdout: {o}\nstderr: {e}"
+    );
+    assert!(
+        !o.contains("wrong-dockerfile-at-context-root"),
+        "must not build the Dockerfile at the context root; stdout: {o}"
+    );
+
+    cleanup(ws);
+}
+
 /// Full Dev Container Features flow: fetch two OCI features, build the extended image, and verify the
 /// installed tools are on PATH inside the container. Requires Docker *and* network access to
 /// ghcr.io / the feature downloads; it is also slow (installs a JDK), so it is `#[ignore]`d by default

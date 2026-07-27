@@ -264,7 +264,8 @@ impl DevContainerConfig {
                 .unwrap_or(false)
     }
 
-    /// The Dockerfile path relative to the build context, if this is a build config.
+    /// The Dockerfile path relative to the config directory (devcontainer.json), if this is a build
+    /// config. Note this is resolved against the config directory, not the build context.
     pub fn dockerfile(&self) -> Option<String> {
         self.docker_file
             .clone()

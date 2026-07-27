@@ -8,6 +8,9 @@ Sample workspaces for exercising `devc`. `cd` into any of these and run `devc` (
   a bind-mounted file (`hello.txt`), and a `postCreateCommand`.
 - `dockerfile-build/` — container built from a `Dockerfile` with a build arg; `postCreateCommand`
   as an argv array.
+- `dockerfile-context/` — Dockerfile in `.devcontainer/` with the build `context` set to the
+  workspace root (`..`) and a decoy `Dockerfile` at that root. Verifies `build.dockerfile` is
+  resolved relative to devcontainer.json, not relative to the context.
 - `compose-unsupported/` — uses `dockerComposeFile`; devc should error clearly (unsupported).
 - `features-java/` — uses Dev Container `features` (Java + GitHub CLI from ghcr.io); devc fetches the
   OCI features, builds an extended image, and installs them. Exercised by the `#[ignore]`d

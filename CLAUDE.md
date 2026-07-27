@@ -1,0 +1,1 @@
+This CLI was original created in accordance with the spec at @.claude/devc-spec.md
