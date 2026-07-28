@@ -37,8 +37,8 @@ Containers make it easy to create reproducible, sandboxed dev environments - tha
 
 ```bash
 # Using the reference CLI
-devcontainer up --workspace-folder .
-devcontainer exec --workspace-folder . npm test
+devcontainer up
+devcontainer exec npm test
 
 # Using devc
 devc npm test
