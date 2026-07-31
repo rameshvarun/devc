@@ -11,8 +11,10 @@ The CLI can be installed in a few ways.
 ```bash
 # Install the CLI using Homebrew
 brew install rameshvarun/tap/devc
+
 # Or, use the install script, which downloads to ~/.local/bin
 curl -fsSL https://raw.githubusercontent.com/rameshvarun/devc/main/install.sh | sh
+
 # Or, download it manually from the releases page
 # https://github.com/rameshvarun/devc/releases/latest
 ```
