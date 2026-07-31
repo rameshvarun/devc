@@ -19,14 +19,21 @@ const LABEL_LOCAL_FOLDER: &str = "devcontainer.local_folder";
 const LABEL_CONFIG_FILE: &str = "devcontainer.config_file";
 const LABEL_MANAGED: &str = "devc.managed";
 
-/// Bring up the dev container for `workspace`, then either open an interactive shell (`command`
-/// empty) or run `command` inside it. Returns the exit code devc should terminate with (the shell's
-/// or the command's exit code).
-pub fn up_and_run(workspace: &Path, command: &[String]) -> Result<i32> {
-    let workspace = std::fs::canonicalize(workspace)
-        .with_context(|| format!("resolving workspace path {}", workspace.display()))?;
-
-    let loaded = config::load(&workspace)?;
+/// Bring up the dev container for the workspace containing `start_dir` (found by walking up to the
+/// nearest ancestor with a spec), then either open an interactive shell (`command` empty) or run
+/// `command` inside it. Returns the exit code devc should terminate with (the shell's or the
+/// command's exit code).
+pub fn up_and_run(start_dir: &Path, command: &[String]) -> Result<i32> {
+    // Discovery walks up from the invocation directory; the workspace root is the ancestor that
+    // actually holds the spec (canonicalized only once found, so permission gaps above it can't
+    // abort the walk).
+    let loaded = config::load(start_dir)?;
+    let workspace = std::fs::canonicalize(&loaded.workspace_root).with_context(|| {
+        format!(
+            "resolving workspace path {}",
+            loaded.workspace_root.display()
+        )
+    })?;
     let config_path = std::fs::canonicalize(&loaded.config_path)
         .unwrap_or_else(|_| loaded.config_path.clone());
 
@@ -100,10 +107,35 @@ pub fn up_and_run(workspace: &Path, command: &[String]) -> Result<i32> {
         )?,
     };
 
+    // The mount and lifecycle anchor at the workspace root, but the interactive shell / user command
+    // should land in the subdirectory devc was invoked from (mapped into the container).
+    let exec_cwd = container_cwd(start_dir, &workspace, &container_workspace_folder);
     if command.is_empty() {
-        open_shell(&container_id, &config, &container_workspace_folder)
+        open_shell(&container_id, &config, &exec_cwd)
     } else {
-        run_command(&container_id, &config, &container_workspace_folder, command)
+        run_command(&container_id, &config, &exec_cwd, command)
+    }
+}
+
+/// Map the invocation directory to a working directory inside the container. When `devc` is run from
+/// a subdirectory of the workspace root, land the shell/command in the matching container
+/// subdirectory; otherwise use the workspace folder. Falls back to the workspace folder if the path
+/// can't be resolved or lies outside the workspace (e.g. an odd custom workspaceMount).
+fn container_cwd(start_dir: &Path, workspace: &Path, container_workspace_folder: &str) -> String {
+    let Ok(start) = std::fs::canonicalize(start_dir) else {
+        return container_workspace_folder.to_string();
+    };
+    match start.strip_prefix(workspace) {
+        Ok(rel) if !rel.as_os_str().is_empty() => {
+            // Join with '/': the container is Linux regardless of host separator.
+            let rel_unix = rel
+                .components()
+                .map(|c| c.as_os_str().to_string_lossy())
+                .collect::<Vec<_>>()
+                .join("/");
+            format!("{}/{}", container_workspace_folder.trim_end_matches('/'), rel_unix)
+        }
+        _ => container_workspace_folder.to_string(),
     }
 }
 

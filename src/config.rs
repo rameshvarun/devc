@@ -204,26 +204,44 @@ pub struct LoadedConfig {
     pub config_path: PathBuf,
     /// Directory containing the config file (the docker build context base for relative paths).
     pub config_dir: PathBuf,
+    /// The workspace root: the ancestor directory that holds the spec (the folder that is bind
+    /// mounted and used for `/workspaces/<basename>`). For `.devcontainer/devcontainer.json` this is
+    /// the parent of `.devcontainer`; for `.devcontainer.json` it is that file's directory.
+    pub workspace_root: PathBuf,
 }
 
-/// Find the `devcontainer.json` for `workspace`, mirroring the reference CLI's well-known paths:
-/// `.devcontainer/devcontainer.json` then `.devcontainer.json`.
-pub fn find_config_path(workspace: &Path) -> Option<PathBuf> {
-    let candidates = [
-        workspace.join(".devcontainer").join("devcontainer.json"),
-        workspace.join(".devcontainer.json"),
-    ];
-    candidates.into_iter().find(|p| p.is_file())
+/// Walk up from `start`, returning `(config_path, workspace_root)` for the first ancestor that holds
+/// a spec, mirroring the reference CLI's well-known names: `.devcontainer/devcontainer.json` then
+/// `.devcontainer.json`. Ascending is pure path manipulation (no filesystem permissions needed); a
+/// candidate that can't be checked due to permissions is reported to stderr and the walk continues.
+fn discover(start: &Path) -> Option<(PathBuf, PathBuf)> {
+    for dir in start.ancestors() {
+        for candidate in [
+            dir.join(".devcontainer").join("devcontainer.json"),
+            dir.join(".devcontainer.json"),
+        ] {
+            match std::fs::metadata(&candidate) {
+                Ok(m) if m.is_file() => return Some((candidate, dir.to_path_buf())),
+                Ok(_) => {}
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
+                    eprintln!("devc: warning: cannot check {} ({e})", candidate.display());
+                }
+                Err(_) => {}
+            }
+        }
+    }
+    None
 }
 
-/// Load and parse the config for a workspace, returning an error when none exists or the config uses
-/// an unsupported feature.
-pub fn load(workspace: &Path) -> Result<LoadedConfig> {
-    let config_path = find_config_path(workspace).ok_or_else(|| {
+/// Load and parse the config for the workspace containing `start`, walking up the directory tree.
+/// Returns an error when no spec exists in any ancestor, or the config uses an unsupported feature.
+pub fn load(start: &Path) -> Result<LoadedConfig> {
+    let (config_path, workspace_root) = discover(start).ok_or_else(|| {
         anyhow!(
-            "No dev container configuration found in {} \
+            "No dev container configuration found in {} or any parent directory \
              (looked for .devcontainer/devcontainer.json and .devcontainer.json).",
-            workspace.display()
+            start.display()
         )
     })?;
 
@@ -244,12 +262,13 @@ pub fn load(workspace: &Path) -> Result<LoadedConfig> {
     let config_dir = config_path
         .parent()
         .map(Path::to_path_buf)
-        .unwrap_or_else(|| workspace.to_path_buf());
+        .unwrap_or_else(|| workspace_root.clone());
 
     Ok(LoadedConfig {
         config,
         config_path,
         config_dir,
+        workspace_root,
     })
 }
 

@@ -9,6 +9,7 @@
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Mutex, MutexGuard, OnceLock};
 
 /// Path to the compiled `devc` binary (provided by Cargo for integration tests).
@@ -21,12 +22,18 @@ fn workspaces_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("test-workspaces")
 }
 
-/// Run `devc` in the given workspace subdirectory with `args` and `stdin`, capturing its output.
+/// Run `devc` in the given workspace subdirectory (under `test-workspaces/`) with `args` and
+/// `stdin`, capturing its output.
 fn run(workspace: &str, args: &[&str], stdin: &str) -> Output {
-    let dir = workspaces_dir().join(workspace);
+    run_in_dir(&workspaces_dir().join(workspace), args, stdin)
+}
+
+/// Run `devc` in an arbitrary absolute directory with `args` and `stdin`, capturing its output.
+/// Used by walk-up tests that need to run outside `test-workspaces/` (e.g. an isolated temp tree).
+fn run_in_dir(dir: &Path, args: &[&str], stdin: &str) -> Output {
     let mut child = Command::new(devc_bin())
         .args(args)
-        .current_dir(&dir)
+        .current_dir(dir)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -39,6 +46,35 @@ fn run(workspace: &str, args: &[&str], stdin: &str) -> Output {
         .write_all(stdin.as_bytes())
         .expect("write stdin");
     child.wait_with_output().expect("failed to wait on devc")
+}
+
+/// A unique temporary directory tree, removed on drop. Used to isolate "no spec found" tests from
+/// the repo's own ancestors: walk-up climbs to `/`, so a spec added anywhere above `test-workspaces/`
+/// (the repo root, `$HOME`, …) would otherwise perturb these tests.
+struct TempTree {
+    base: PathBuf,
+}
+
+impl TempTree {
+    /// Create a fresh base dir under the OS temp dir with the nested subpath `rel` created inside it.
+    fn new(rel: &str) -> TempTree {
+        static COUNTER: AtomicUsize = AtomicUsize::new(0);
+        let n = COUNTER.fetch_add(1, Ordering::Relaxed);
+        let base = std::env::temp_dir().join(format!("devc-test-{}-{}", std::process::id(), n));
+        std::fs::create_dir_all(base.join(rel)).expect("create temp tree");
+        TempTree { base }
+    }
+
+    /// The deepest directory (`base/rel`) to run `devc` from.
+    fn deep(&self, rel: &str) -> PathBuf {
+        self.base.join(rel)
+    }
+}
+
+impl Drop for TempTree {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.base);
+    }
 }
 
 fn stdout(out: &Output) -> String {
@@ -129,13 +165,55 @@ fn help_prints_usage() {
 
 #[test]
 fn missing_config_errors() {
-    let out = run("no-config", &[], "");
+    // Run in an isolated temp dir: walk-up climbs to `/`, so running inside the repo would couple
+    // this assertion to every ancestor (repo root, $HOME, …).
+    let tree = TempTree::new("");
+    let out = run_in_dir(&tree.base, &[], "");
     assert!(!out.status.success(), "should fail without a config");
     assert!(
         stderr(&out).contains("No dev container configuration found"),
         "should explain the missing config, got: {}",
         stderr(&out)
     );
+}
+
+#[test]
+fn missing_config_walks_up_then_errors() {
+    // From a deep subdirectory with no spec in any ancestor of the temp tree, discovery walks up
+    // and reports that it searched parents too.
+    let tree = TempTree::new("a/b/c");
+    let out = run_in_dir(&tree.deep("a/b/c"), &[], "");
+    assert!(!out.status.success(), "should fail without a config anywhere above");
+    let e = stderr(&out);
+    assert!(
+        e.contains("No dev container configuration found"),
+        "should explain the missing config, got: {e}"
+    );
+    assert!(
+        e.contains("or any parent directory"),
+        "should mention it walked up, got: {e}"
+    );
+}
+
+#[test]
+fn config_is_found_from_subdirectory() {
+    require_docker!();
+    let _guard = docker_lock();
+    let ws = "image-simple";
+    cleanup(ws);
+
+    // Running from a subdirectory of a workspace, discovery should climb to the spec (image-simple)
+    // rather than reporting not-found. Docker-gated + locked because a successful climb brings the
+    // container up, which would otherwise pollute the shared image-simple tests.
+    let out = run("image-simple/nested/deep", &[], "exit 0\n");
+    assert!(out.status.success(), "run should succeed; stderr: {}", stderr(&out));
+    assert!(
+        !stderr(&out).contains("No dev container configuration found"),
+        "discovery should climb to image-simple from a subdir, got: {}",
+        stderr(&out)
+    );
+
+    cleanup(ws);
 }
 
 #[test]
@@ -179,6 +257,73 @@ fn image_up_shell_env_mount_and_exit_code() {
     assert!(o.contains("bind-mount marker"), "bind mount; stdout: {o}");
     // A labeled container exists.
     assert_eq!(container_ids(ws).len(), 1, "exactly one labeled container");
+
+    cleanup(ws);
+}
+
+#[test]
+fn walks_up_to_workspace_root_from_subdirectory() {
+    require_docker!();
+    let _guard = docker_lock();
+    let ws = "image-simple";
+    cleanup(ws);
+
+    // Invoked from image-simple/nested/deep, the workspace root (mount + /workspaces/<name>) must be
+    // image-simple itself, not the subdirectory. The shell's cwd moves into the subdir (covered by
+    // shell_opens_in_invocation_subdirectory), so a relative `../../hello.txt` from `nested/deep`
+    // must climb back to the root marker — proving both the cwd depth and that the mount covers root.
+    let out = run("image-simple/nested/deep", &[], "cat ../../hello.txt\nexit 0\n");
+    let o = stdout(&out);
+    let e = stderr(&out);
+
+    assert!(out.status.success(), "run should succeed; stderr: {e}");
+    // The bind mount is the whole workspace, so the marker file at the root is visible.
+    assert!(o.contains("bind-mount marker"), "bind mount should cover workspace root; stdout: {o}");
+    // The container is labeled for image-simple (same identity as running from the root).
+    assert_eq!(container_ids(ws).len(), 1, "exactly one labeled container for the workspace root");
+
+    cleanup(ws);
+}
+
+#[test]
+fn shell_opens_in_invocation_subdirectory() {
+    require_docker!();
+    let _guard = docker_lock();
+    let ws = "image-simple";
+    cleanup(ws);
+
+    // Invoked from a subdirectory, the interactive shell should open in that subdirectory (mapped
+    // into the container), not at the workspace root.
+    let out = run("image-simple/nested/deep", &[], "pwd\nexit 0\n");
+    let o = stdout(&out);
+    let e = stderr(&out);
+
+    assert!(out.status.success(), "run should succeed; stderr: {e}");
+    assert!(
+        o.contains("/workspaces/image-simple/nested/deep"),
+        "shell cwd should be the invocation subdir; stdout: {o}\nstderr: {e}"
+    );
+
+    cleanup(ws);
+}
+
+#[test]
+fn command_runs_in_invocation_subdirectory() {
+    require_docker!();
+    let _guard = docker_lock();
+    let ws = "image-simple";
+    cleanup(ws);
+
+    // The `devc <command>` form is offset to the invocation subdir too, not just the shell.
+    let out = run("image-simple/nested/deep", &["pwd"], "");
+    let o = stdout(&out);
+    let e = stderr(&out);
+
+    assert!(out.status.success(), "run should succeed; stderr: {e}");
+    assert!(
+        o.contains("/workspaces/image-simple/nested/deep"),
+        "command cwd should be the invocation subdir; stdout: {o}\nstderr: {e}"
+    );
 
     cleanup(ws);
 }
@@ -284,10 +429,9 @@ fn dockerfile_is_resolved_relative_to_config_not_context() {
 
 /// Full Dev Container Features flow: fetch two OCI features, build the extended image, and verify the
 /// installed tools are on PATH inside the container. Requires Docker *and* network access to
-/// ghcr.io / the feature downloads; it is also slow (installs a JDK), so it is `#[ignore]`d by default
-/// — run with `cargo test -- --ignored`.
+/// ghcr.io / the feature downloads. Fast once the image layers are cached; Docker-gated so it
+/// self-skips without a daemon.
 #[test]
-#[ignore = "slow: fetches OCI features and installs a JDK; needs network"]
 fn features_install_java_and_gh() {
     require_docker!();
     let _guard = docker_lock();
@@ -307,4 +451,35 @@ fn features_install_java_and_gh() {
     assert!(o.contains("vscode"), "should run as remoteUser vscode; stdout: {o}");
 
     cleanup(ws);
+}
+
+/// An unreadable `.devcontainer` directory encountered during the walk is reported to stderr and the
+/// walk continues rather than aborting.
+#[test]
+#[cfg(unix)]
+fn permission_denied_ancestor_warns_and_continues() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let tree = TempTree::new("a/b/c");
+    // A `.devcontainer` dir at the top of the tree that we can't enter: stat of the nested
+    // devcontainer.json fails with EACCES.
+    let blocked = tree.base.join(".devcontainer");
+    std::fs::create_dir_all(&blocked).expect("create .devcontainer");
+    std::fs::set_permissions(&blocked, std::fs::Permissions::from_mode(0o000)).expect("chmod 000");
+
+    let out = run_in_dir(&tree.deep("a/b/c"), &[], "");
+
+    // Restore permissions so the TempTree can be removed on drop.
+    let _ = std::fs::set_permissions(&blocked, std::fs::Permissions::from_mode(0o755));
+
+    let e = stderr(&out);
+    assert!(!out.status.success(), "should still fail without a usable config; stderr: {e}");
+    assert!(
+        e.contains("warning: cannot check"),
+        "should warn about the unreadable directory, got: {e}"
+    );
+    assert!(
+        e.contains("No dev container configuration found"),
+        "walk should continue and report not-found, got: {e}"
+    );
 }
