@@ -1,6 +1,6 @@
 [package]
 name = "devc"
-version = "0.5.0"
+version = "0.6.0"
 edition = "2021"
 description = "Shortcut CLI that brings up the current workspace's dev container and opens a shell into it."
 
