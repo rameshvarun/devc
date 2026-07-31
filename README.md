@@ -1,5 +1,7 @@
 # devc
 
+[![GitHub Release](https://img.shields.io/github/v/release/rameshvarun/devc)](https://github.com/rameshvarun/devc/releases/latest)
+
 `devc` is an alternate [devcontainers](https://containers.dev/) CLI with a simplified interface. It's based on the [upstream reference CLI](https://github.com/devcontainers/cli), but ported to Rust by Claude and packaged as a single self-contained binary.
 
 Currently macOS and Linux are supported. As a prerequisite, you need to have a Docker-compatible container runtime installed.
