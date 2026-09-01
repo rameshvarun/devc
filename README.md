@@ -33,6 +33,7 @@ devc # Or, run with no arguments to get a shell inside the container.
 
 ```bash
 devc --help # Print usage information
+dev down # Tear down the container
 ```
 
 ## Motivation
