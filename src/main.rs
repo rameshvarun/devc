@@ -22,7 +22,8 @@ fn main() -> ExitCode {
             "devc — bring up the current directory's dev container.\n\n\
              Usage:\n  \
              devc                 build/start the container and open an interactive shell\n  \
-             devc <command>...    build/start the container and run <command> inside it\n\n\
+             devc <command>...    build/start the container and run <command> inside it\n  \
+             devc down            stop and remove the container for this workspace\n\n\
              Run from a project directory that has a .devcontainer spec."
         );
         return ExitCode::SUCCESS;
@@ -36,11 +37,29 @@ fn main() -> ExitCode {
         }
     };
 
-    match container::up_and_run(&workspace, &args) {
-        Ok(code) => ExitCode::from(code.clamp(0, 255) as u8),
-        Err(e) => {
-            eprintln!("devc: {e:#}");
-            ExitCode::FAILURE
+    // A small (growing) set of devc subcommands take priority over running a like-named program
+    // inside the container. `devc down` tears the container down; consequently you cannot invoke an
+    // in-container command literally named `down` this way.
+    match args.first().map(String::as_str) {
+        Some("down") => {
+            if args.len() > 1 {
+                eprintln!("devc: `down` takes no arguments");
+                return ExitCode::FAILURE;
+            }
+            match container::down(&workspace) {
+                Ok(()) => ExitCode::SUCCESS,
+                Err(e) => {
+                    eprintln!("devc: {e:#}");
+                    ExitCode::FAILURE
+                }
+            }
         }
+        _ => match container::up_and_run(&workspace, &args) {
+            Ok(code) => ExitCode::from(code.clamp(0, 255) as u8),
+            Err(e) => {
+                eprintln!("devc: {e:#}");
+                ExitCode::FAILURE
+            }
+        },
     }
 }

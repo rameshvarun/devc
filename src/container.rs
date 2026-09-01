@@ -27,15 +27,7 @@ pub fn up_and_run(start_dir: &Path, command: &[String]) -> Result<i32> {
     // Discovery walks up from the invocation directory; the workspace root is the ancestor that
     // actually holds the spec (canonicalized only once found, so permission gaps above it can't
     // abort the walk).
-    let loaded = config::load(start_dir)?;
-    let workspace = std::fs::canonicalize(&loaded.workspace_root).with_context(|| {
-        format!(
-            "resolving workspace path {}",
-            loaded.workspace_root.display()
-        )
-    })?;
-    let config_path = std::fs::canonicalize(&loaded.config_path)
-        .unwrap_or_else(|_| loaded.config_path.clone());
+    let (loaded, workspace, config_path) = discover(start_dir)?;
 
     // Compute workspace mount + container workspace folder, then substitute variables in the config.
     let ws_basename = basename(&workspace);
@@ -64,10 +56,7 @@ pub fn up_and_run(start_dir: &Path, command: &[String]) -> Result<i32> {
         run_host_command(cmd, &workspace).context("initializeCommand failed")?;
     }
 
-    let labels = [
-        (LABEL_LOCAL_FOLDER, workspace.to_string_lossy().into_owned()),
-        (LABEL_CONFIG_FILE, config_path.to_string_lossy().into_owned()),
-    ];
+    let labels = identity_labels(&workspace, &config_path);
     let label_refs: Vec<(&str, &str)> = labels.iter().map(|(k, v)| (*k, v.as_str())).collect();
 
     let existing = docker::find_by_labels(&label_refs)?;
@@ -115,6 +104,47 @@ pub fn up_and_run(start_dir: &Path, command: &[String]) -> Result<i32> {
     } else {
         run_command(&container_id, &config, &exec_cwd, command)
     }
+}
+
+/// Tear down the dev container for the workspace containing `start_dir`: stop and remove it. A no-op
+/// (with a message) when no matching container exists.
+pub fn down(start_dir: &Path) -> Result<()> {
+    let (_loaded, workspace, config_path) = discover(start_dir)?;
+    let labels = identity_labels(&workspace, &config_path);
+    let label_refs: Vec<(&str, &str)> = labels.iter().map(|(k, v)| (*k, v.as_str())).collect();
+
+    match docker::find_by_labels(&label_refs)? {
+        Some(found) => {
+            docker::remove(&found.id)?;
+            eprintln!("devc: removed container {}", short(&found.id));
+        }
+        None => eprintln!("devc: no dev container to tear down for this workspace"),
+    }
+    Ok(())
+}
+
+/// Discover the workspace containing `start_dir`, returning the loaded config plus the canonical
+/// workspace root and config path. Shared by `up_and_run` and `down`.
+fn discover(start_dir: &Path) -> Result<(LoadedConfig, PathBuf, PathBuf)> {
+    let loaded = config::load(start_dir)?;
+    let workspace = std::fs::canonicalize(&loaded.workspace_root).with_context(|| {
+        format!(
+            "resolving workspace path {}",
+            loaded.workspace_root.display()
+        )
+    })?;
+    let config_path = std::fs::canonicalize(&loaded.config_path)
+        .unwrap_or_else(|_| loaded.config_path.clone());
+    Ok((loaded, workspace, config_path))
+}
+
+/// The identity labels devc stamps on a container, keying it to the workspace + config file. Used
+/// both to find an existing container and to create a new one.
+fn identity_labels(workspace: &Path, config_path: &Path) -> [(&'static str, String); 2] {
+    [
+        (LABEL_LOCAL_FOLDER, workspace.to_string_lossy().into_owned()),
+        (LABEL_CONFIG_FILE, config_path.to_string_lossy().into_owned()),
+    ]
 }
 
 /// Map the invocation directory to a working directory inside the container. When `devc` is run from

@@ -267,6 +267,38 @@ fn image_up_shell_env_mount_and_exit_code() {
 }
 
 #[test]
+fn down_tears_down_container_from_subdirectory() {
+    require_docker!();
+    let _guard = docker_lock();
+    let ws = "image-simple";
+    cleanup(ws);
+
+    // Bring the container up from the workspace root.
+    let up = run(ws, &[], "exit 0\n");
+    assert!(up.status.success(), "up should succeed; stderr: {}", stderr(&up));
+    assert_eq!(container_ids(ws).len(), 1, "container should exist after bringing it up");
+
+    // `devc down` from a subdirectory of the workspace should still resolve the workspace root and
+    // remove that container (down is a priority command, not a command run inside the container).
+    let down = run("image-simple/nested/deep", &["down"], "");
+    let e = stderr(&down);
+    assert!(down.status.success(), "down should succeed; stderr: {e}");
+    assert!(e.contains("removed container"), "down should report removal; stderr: {e}");
+    assert_eq!(container_ids(ws).len(), 0, "container should be gone after down; stderr: {e}");
+
+    // A second down is a clean no-op with a message rather than an error.
+    let again = run(ws, &["down"], "");
+    let e2 = stderr(&again);
+    assert!(again.status.success(), "down with nothing to remove should still succeed; stderr: {e2}");
+    assert!(
+        e2.contains("no dev container to tear down"),
+        "down should note there was nothing to remove; stderr: {e2}"
+    );
+
+    cleanup(ws);
+}
+
+#[test]
 fn walks_up_to_workspace_root_from_subdirectory() {
     require_docker!();
     let _guard = docker_lock();

@@ -123,6 +123,13 @@ pub fn start(id: &str) -> Result<()> {
     run_inherit(&["start".to_string(), id.to_string()])
 }
 
+/// Force-remove a container, stopping it first if it is running. `docker rm -f` echoes the id on
+/// success; we capture (and discard) that so teardown output stays clean.
+pub fn remove(id: &str) -> Result<()> {
+    run_capture(&["rm".to_string(), "-f".to_string(), id.to_string()])?;
+    Ok(())
+}
+
 /// Run a command inside a container.
 ///
 /// `interactive` attaches our stdin to the command (`-i`, stdin inherited) — used for the shell;
