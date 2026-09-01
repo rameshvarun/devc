@@ -5,4 +5,5 @@
   "containerEnv": { "FOO": "bar-${localWorkspaceFolderBasename}" },
   "remoteEnv": { "HELLO": "world" },
   "postCreateCommand": "touch /tmp/created && echo postcreate-ran",
+  "postStartCommand": "echo poststart-ws=${containerWorkspaceFolder}",
 }

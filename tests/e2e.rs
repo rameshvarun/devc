@@ -249,6 +249,11 @@ fn image_up_shell_env_mount_and_exit_code() {
     assert!(o.contains("postcreate-ran"), "postCreate should run; stdout: {o}\nstderr: {e}");
     // containerEnv with ${localWorkspaceFolderBasename} substitution.
     assert!(o.contains("FOO_IS=bar-image-simple"), "containerEnv/substitution; stdout: {o}");
+    // postStartCommand ran with ${containerWorkspaceFolder} substituted.
+    assert!(
+        o.contains("poststart-ws=/workspaces/image-simple"),
+        "postStart ${{containerWorkspaceFolder}} substitution; stdout: {o}\nstderr: {e}"
+    );
     // remoteEnv applied to the shell.
     assert!(o.contains("HELLO_IS=world"), "remoteEnv; stdout: {o}");
     // Default container workspace folder.

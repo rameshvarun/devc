@@ -507,6 +507,31 @@ fn substitute_config(mut config: DevContainerConfig, ctx: &SubstitutionContext) 
         .map(|(k, v)| (k.clone(), v.as_deref().map(sub)))
         .collect();
 
+    let sub_cmd = |cmd: config::Command| -> config::Command {
+        let sub_argv = |a: Vec<String>| a.iter().map(|s| sub(s)).collect();
+        match cmd {
+            config::Command::Shell(s) => config::Command::Shell(sub(&s)),
+            config::Command::Argv(a) => config::Command::Argv(sub_argv(a)),
+            config::Command::Named(map) => config::Command::Named(
+                map.into_iter()
+                    .map(|(k, v)| {
+                        let v = match v {
+                            StringOrArgv::Shell(s) => StringOrArgv::Shell(sub(&s)),
+                            StringOrArgv::Argv(a) => StringOrArgv::Argv(sub_argv(a)),
+                        };
+                        (k, v)
+                    })
+                    .collect(),
+            ),
+        }
+    };
+    config.initialize_command = config.initialize_command.map(&sub_cmd);
+    config.on_create_command = config.on_create_command.map(&sub_cmd);
+    config.update_content_command = config.update_content_command.map(&sub_cmd);
+    config.post_create_command = config.post_create_command.map(&sub_cmd);
+    config.post_start_command = config.post_start_command.map(&sub_cmd);
+    config.post_attach_command = config.post_attach_command.map(&sub_cmd);
+
     config.run_args = config.run_args.iter().map(|s| sub(s)).collect();
     config.mounts = config
         .mounts
