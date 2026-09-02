@@ -48,3 +48,6 @@ devcontainer exec npm test
 # Using devc
 devc npm test
 ```
+
+## Similar Projects
+- [brig](https://github.com/nlsantos/brig) - A similar concept written in Go. Brig treats containers as ephemeral whereas `devc` spins up persistent containers, which I generally prefer for devcontainers specifically.
