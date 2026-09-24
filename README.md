@@ -20,6 +20,9 @@ curl -fsSL https://raw.githubusercontent.com/rameshvarun/devc/main/install.sh | 
 
 # Or, download it manually from the releases page
 # https://github.com/rameshvarun/devc/releases/latest
+
+# Or, install from source
+cargo install --git https://github.com/rameshvarun/devc --locked
 ```
 
 Once the CLI is installed, switch to a project that has a `.devcontainer` spec.
