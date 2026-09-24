@@ -164,6 +164,18 @@ fn help_prints_usage() {
 }
 
 #[test]
+fn version_prints_version() {
+    let out = run("no-config", &["--version"], "");
+    assert!(out.status.success(), "--version should exit 0");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(
+        stdout.trim(),
+        format!("devc {}", env!("CARGO_PKG_VERSION")),
+        "got: {stdout}"
+    );
+}
+
+#[test]
 fn missing_config_errors() {
     // Run in an isolated temp dir: walk-up climbs to `/`, so running inside the repo would couple
     // this assertion to every ancestor (repo root, $HOME, …).

@@ -14,8 +14,8 @@ use std::process::ExitCode;
 
 fn main() -> ExitCode {
     // With no arguments, devc opens a shell. Any arguments are the command to run in the container.
-    // `-h`/`--help` on its own prints usage; as later arguments it belongs to the inner command
-    // (e.g. `devc ./gradlew --help`), so only treat a lone first flag as a usage request.
+    // `-h`/`--help`/`--version` on their own are devc's own flags; as later arguments they belong to
+    // the inner command (e.g. `devc ./gradlew --help`), so only treat a lone first flag as ours.
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.len() == 1 && (args[0] == "-h" || args[0] == "--help") {
         eprintln!(
@@ -23,9 +23,14 @@ fn main() -> ExitCode {
              Usage:\n  \
              devc                 build/start the container and open an interactive shell\n  \
              devc <command>...    build/start the container and run <command> inside it\n  \
-             devc down            stop and remove the container for this workspace\n\n\
+             devc down            stop and remove the container for this workspace\n  \
+             devc --version       print the devc version\n\n\
              Run from a project directory that has a .devcontainer spec."
         );
+        return ExitCode::SUCCESS;
+    }
+    if args.len() == 1 && args[0] == "--version" {
+        println!("devc {}", env!("CARGO_PKG_VERSION"));
         return ExitCode::SUCCESS;
     }
 
