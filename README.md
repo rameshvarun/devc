@@ -1,6 +1,7 @@
 # devc
 
 [![GitHub Release](https://img.shields.io/github/v/release/rameshvarun/devc)](https://github.com/rameshvarun/devc/releases/latest)
+[![CI](https://img.shields.io/github/actions/workflow/status/rameshvarun/devc/ci.yml?branch=main&label=CI)](https://github.com/rameshvarun/devc/actions/workflows/ci.yml)
 
 `devc` is an alternate [devcontainers](https://containers.dev/) CLI with a simplified interface. It's based on the [upstream reference CLI](https://github.com/devcontainers/cli), but ported to Rust by Claude and packaged as a single self-contained binary.
 
